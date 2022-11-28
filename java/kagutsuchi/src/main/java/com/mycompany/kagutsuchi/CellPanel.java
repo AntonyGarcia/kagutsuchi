@@ -36,6 +36,7 @@ public class CellPanel extends JPanel {
             if (Integer.parseInt(array.get(i) + "") == index) {
                 border = new LineBorder(Color.GREEN, 4);
                 setBorder(border);
+                this.selectedState=true;
             }
         }
 
@@ -76,7 +77,9 @@ public class CellPanel extends JPanel {
                 JSONArray array = (JSONArray) settingsFile.get(imageName);
                 List<Integer> indexes = new ArrayList<>();
                 for (int i = 0; i < array.size(); i++) {
-                    indexes.add(Integer.parseInt(array.get(i) + ""));
+                    if (Integer.parseInt(array.get(i) + "") != cellIndex) {
+                        indexes.add(Integer.parseInt(array.get(i) + ""));
+                    }
                 }
                 if (!indexes.contains(cellIndex)) {
                     if (selectedState) {
