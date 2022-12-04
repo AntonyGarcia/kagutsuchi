@@ -62,12 +62,24 @@ public class ImageHandler {
         this.imageList = imageList;
     }
 
-    public void cleanOutputPath() {
-        try ( Stream<Path> paths = Files.walk(Paths.get("imgs"))) {
+    public void cleanOutputPath(String path) {
+        try ( Stream<Path> paths = Files.walk(Paths.get(path))) {
             paths.filter(Files::isRegularFile).forEach(a -> {
                 if (a.getFileName().toString().contains(".jpg")) {
                     a.toFile().delete();
                 }
+            });
+        } catch (IOException ex) {
+            Logger.getLogger(JFrameWindow.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }
+
+    public void splitImagesIntoDatasets() {
+        String path = String.valueOf(mainSettingsFile.get("images_path")).replace("\\split_images\\ir_images", "") + "\\exported_images";
+
+        try ( Stream<Path> paths = Files.walk(Paths.get(path))) {
+            paths.filter(Files::isRegularFile).forEach(a -> {
+                System.out.println(a.getFileName());
             });
         } catch (IOException ex) {
             Logger.getLogger(JFrameWindow.class.getName()).log(Level.SEVERE, null, ex);
@@ -167,7 +179,9 @@ public class ImageHandler {
     public void test() throws IOException {
         long startTime = System.currentTimeMillis();
 
-        cleanOutputPath();
+        cleanOutputPath(String.valueOf(mainSettingsFile.get("images_path")).replace("\\split_images\\ir_images", "") + "\\exported_images\\train_dataset");
+        cleanOutputPath(String.valueOf(mainSettingsFile.get("images_path")).replace("\\split_images\\ir_images", "") + "\\exported_images\\test_dataset");
+        cleanOutputPath(String.valueOf(mainSettingsFile.get("images_path")).replace("\\split_images\\ir_images", "") + "\\exported_images");
 
         int vGap = 0;
         int hGap = 0;
@@ -282,12 +296,12 @@ public class ImageHandler {
                                     g2d.rotate(Math.toRadians(l * 90), theImage.getWidth() / 2, theImage.getHeight() / 2);
                                     g2d.drawImage(img, 0, 0, null);
                                     g2d.dispose();
-                                    exportImage(dimg, "imgs/" + imageList.get(n).replace(".jpg", "") + "_" + cellIndex + "_rot_" + l + "_pos.jpg");
+
+                                    exportImage(dimg, String.valueOf(mainSettingsFile.get("images_path")).replace("\\split_images\\ir_images", "") + "\\exported_images\\" + imageList.get(n).replace(".jpg", "") + "_" + cellIndex + "_rot_" + l + "_pos.jpg");
                                     if (frameRotation == 0) {
                                         break;
                                     }
                                 }
-
                                 if (frameFlip == 1) {
                                     BufferedImage flipImg = new BufferedImage(theImage.getWidth(), theImage.getHeight(), cS);
                                     BufferedImage flipImg2 = new BufferedImage(theImage.getWidth(), theImage.getHeight(), cS);
@@ -299,30 +313,26 @@ public class ImageHandler {
                                             flipImg.setRGB(l, m, flipImg2.getRGB(flipImg2.getWidth() - l - 1, m));
                                         }
                                     }
-                                    // exportImage(dimg, "imgs/" + imageList.get(n).replace(".jpg", "") + "_" + cellIndex + "_flip.jpg");
-
                                     for (int l = 0; l <= 3; l++) {
                                         BufferedImage dimg = new BufferedImage(flipImg.getWidth(), flipImg.getHeight(), cS);
                                         Graphics2D g2d = dimg.createGraphics();
                                         g2d.rotate(Math.toRadians(l * 90), flipImg.getWidth() / 2, flipImg.getHeight() / 2);
                                         g2d.drawImage(flipImg, 0, 0, null);
                                         g2d.dispose();
-                                        exportImage(dimg, "imgs/" + imageList.get(n).replace(".jpg", "") + "_" + cellIndex + "_flip_rot_" + l + "_pos.jpg");
+                                        exportImage(dimg, String.valueOf(mainSettingsFile.get("images_path")).replace("\\split_images\\ir_images", "") + "\\exported_images\\" + imageList.get(n).replace(".jpg", "") + "_" + cellIndex + "_flip_rot_" + l + "_pos.jpg");
                                         if (frameFlipRotation == 0) {
                                             break;
                                         }
                                     }
                                 }
                             } else {
-
                                 Image img = theImage.getScaledInstance(theImage.getWidth(), theImage.getHeight(), Image.SCALE_SMOOTH);
                                 BufferedImage dimg = new BufferedImage(theImage.getWidth(), theImage.getHeight(), cS);
                                 Graphics2D g2d = dimg.createGraphics();
                                 g2d.drawImage(img, 0, 0, null);
                                 g2d.dispose();
-                                exportImage(dimg, "imgs/" + imageList.get(n).replace(".jpg", "") + "_" + cellIndex + "_neg.jpg");
+                                exportImage(dimg, String.valueOf(mainSettingsFile.get("images_path")).replace("\\split_images\\ir_images", "") + "\\exported_images\\" + imageList.get(n).replace(".jpg", "") + "_" + cellIndex + "_neg.jpg");
                             }
-
                             cellIndex++;
                         }
                     }
@@ -336,6 +346,9 @@ public class ImageHandler {
             services.add(executor);
             break;
         }
+
+        splitImagesIntoDatasets();
+
         long estimatedTime = System.currentTimeMillis() - startTime;
         System.out.println("Time: " + estimatedTime);
     }

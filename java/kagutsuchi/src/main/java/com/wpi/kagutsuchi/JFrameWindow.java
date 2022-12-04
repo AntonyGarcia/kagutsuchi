@@ -73,6 +73,7 @@ public class JFrameWindow extends javax.swing.JFrame {
                     if (loadFlag) {
                         pathSettingsFile.put("black_cell_removal_rate", jComboBox4.getSelectedIndex());
                         saveTextFile(mainSettingsFile.get("images_path") + "\\settings.json", pathSettingsFile.toJSONString());
+                        updateDatasetInfomation();
                     }
                 }
             });
@@ -84,6 +85,7 @@ public class JFrameWindow extends javax.swing.JFrame {
                         pathSettingsFile.put("training_set_size", str.substring(0, str.indexOf("-")));
                         pathSettingsFile.put("testing_set_size", str.substring(str.indexOf("-") + 1));
                         saveTextFile(mainSettingsFile.get("images_path") + "\\settings.json", pathSettingsFile.toJSONString());
+                        updateDatasetInfomation();
                     }
                 }
             });
@@ -253,7 +255,7 @@ public class JFrameWindow extends javax.swing.JFrame {
 
     public void buildDatasetTable() {
         DefaultTableModel model = (DefaultTableModel) jTable2.getModel();
-        for (int i = 0; i < 13; i++) {
+        for (int i = 0; i < 16; i++) {
             model.addRow(new Object[]{"", ""});
         }
         model.setValueAt("Images count", 0, 0);
@@ -261,15 +263,18 @@ public class JFrameWindow extends javax.swing.JFrame {
         model.setValueAt("Grid resolution", 2, 0);
         model.setValueAt("Pixels per cell", 3, 0);
         model.setValueAt("Cells per image", 4, 0);
-        model.setValueAt("Total positive cells", 5, 0);
-        model.setValueAt("Total negative cells", 6, 0);
+        model.setValueAt("Selected positive cells", 5, 0);
+        model.setValueAt("Selected negative cells", 6, 0);
         model.setValueAt("Black cells", 7, 0);
         model.setValueAt("Generated positive cells", 8, 0);
-        model.setValueAt("Negative cells to remove", 9, 0);
-        model.setValueAt("Positive cells to export", 10, 0);
-        model.setValueAt("Negative cells to export", 11, 0);
+        model.setValueAt("Black cells to remove", 9, 0);
+        model.setValueAt("Negative cells to remove", 10, 0);
+        model.setValueAt("Positive cells to export", 11, 0);
+        model.setValueAt("Negative cells to export", 12, 0);
+        model.setValueAt("Cells to export", 13, 0);
 
-        model.setValueAt("Cells to export", 12, 0);
+        model.setValueAt("Train dataset", 14, 0);
+        model.setValueAt("Test dataset", 15, 0);
     }
 
     public void updateDatasetInfomation() {
@@ -278,8 +283,8 @@ public class JFrameWindow extends javax.swing.JFrame {
 
         int w = Img.getIconWidth();
         int h = Img.getIconHeight();
-        int imagesPerCell = (int) ((w / cellSize) * (h / cellSize));
-        int totalCells = imagesPerCell * jTable1.getRowCount();
+        int cellsPerImage = (int) ((w / cellSize) * (h / cellSize));
+        int totalCells = cellsPerImage * jTable1.getRowCount();
         int positiveCells = 0;
         int negativeCells = 0;
         int blackCells = 0;
@@ -292,8 +297,23 @@ public class JFrameWindow extends javax.swing.JFrame {
         }
         for (int i = 0; i < imagesList.size(); i++) {
             JSONArray gridArray = (JSONArray) ((JSONObject) ((JSONArray) pathSettingsFile.get("black_cells")).get(0)).get(imagesList.get(i));
-            blackCells = blackCells + gridArray.size();
+            blackCells = (blackCells + gridArray.size());
         }
+
+        negativeCells = totalCells - positiveCells;
+
+        double posPerc = (positiveCells * Math.pow(totalCells, -1)) * 100;
+        double negPerc = (negativeCells * Math.pow(totalCells, -1)) * 100;
+        double blackPerc = (blackCells * Math.pow(totalCells, -1)) * 100;
+
+        jTable2.setValueAt(jTable1.getRowCount(), 0, 1);
+        jTable2.setValueAt(w + " x " + h + " px", 1, 1);
+        jTable2.setValueAt(cellSize + " px", 2, 1);
+        jTable2.setValueAt(cellSize * cellSize + " px", 3, 1);
+        jTable2.setValueAt(cellsPerImage, 4, 1);
+        jTable2.setValueAt(positiveCells + " (" + f.format(posPerc) + " %)", 5, 1);
+        jTable2.setValueAt(negativeCells + " (" + f.format(negPerc) + " %)", 6, 1);
+        jTable2.setValueAt(blackCells + " (" + f.format(blackPerc) + " %)", 7, 1);
 
         if (jCheckBox1.isSelected()) {
             genPostCells = genPostCells + (positiveCells * 3);
@@ -305,40 +325,35 @@ public class JFrameWindow extends javax.swing.JFrame {
             genPostCells = genPostCells + (positiveCells * 3);
         }
 
-        negativeCells = totalCells - positiveCells;
-
-        if (jCheckBox5.isSelected()) {
-            cellsToRemove = negativeCells - positiveCells;
-        }
-
-        double posPerc = (positiveCells * Math.pow(totalCells, -1)) * 100;
-        double negPerc = (negativeCells * Math.pow(totalCells, -1)) * 100;
-        double blackPerc = (blackCells * Math.pow(totalCells, -1)) * 100;
         double genPerc = (genPostCells * Math.pow(totalCells, -1)) * 100;
-        totalCells = positiveCells + genPostCells + negativeCells - blackCells;
-        if (jCheckBox5.isSelected()) {
-            cellsToRemove = negativeCells - blackCells - positiveCells - genPostCells;
-        }
-        double remPerc = (cellsToRemove * Math.pow(totalCells, -1)) * 100;
-
-        double fixedPosPerc = ((positiveCells + genPostCells) * Math.pow(totalCells, -1)) * 100;
-        double fixedNegPerc = ((negativeCells - blackCells - cellsToRemove) * Math.pow(totalCells, -1)) * 100;
-
-        totalCells = positiveCells + genPostCells + negativeCells - blackCells - cellsToRemove;
-
-        jTable2.setValueAt(jTable1.getRowCount(), 0, 1);
-        jTable2.setValueAt(w + " x " + h + " px", 1, 1);
-        jTable2.setValueAt(cellSize + " px", 2, 1);
-        jTable2.setValueAt(cellSize * cellSize + " px", 3, 1);
-        jTable2.setValueAt(imagesPerCell, 4, 1);
-        jTable2.setValueAt(positiveCells + " (" + f.format(posPerc) + " %)", 5, 1);
-        jTable2.setValueAt(negativeCells + " (" + f.format(negPerc) + " %)", 6, 1);
-        jTable2.setValueAt(blackCells + " (" + f.format(blackPerc) + " %)", 7, 1);
         jTable2.setValueAt(genPostCells + " (" + f.format(genPerc) + " %)", 8, 1);
-        jTable2.setValueAt(cellsToRemove + " (" + f.format(remPerc) + " %)", 9, 1);
-        jTable2.setValueAt((positiveCells + genPostCells) + " (" + f.format(fixedPosPerc) + " %)", 10, 1);
-        jTable2.setValueAt((negativeCells - blackCells - cellsToRemove) + " (" + f.format(fixedNegPerc) + " %)", 11, 1);
-        jTable2.setValueAt(totalCells + "", 12, 1);
+        positiveCells = positiveCells + genPostCells;
+
+        totalCells = positiveCells + negativeCells - blackCells;
+
+        int blackCellsToRemove = (int) (blackCells * (Integer.parseInt(String.valueOf(jComboBox4.getSelectedItem()).replace(" %", "")) * 0.01));
+        double blackPercToRemove = (blackCellsToRemove * Math.pow(totalCells, -1)) * 100;
+
+        jTable2.setValueAt(blackCellsToRemove + " (" + f.format(blackPercToRemove) + " %)", 9, 1);
+        negativeCells = negativeCells - blackCellsToRemove;
+        int negativeCellsToRemove = negativeCells - positiveCells;
+        double negativeCellsToRemovePerc = (negativeCellsToRemove * Math.pow(totalCells, -1)) * 100;
+        jTable2.setValueAt(negativeCellsToRemove + " (" + f.format(negativeCellsToRemovePerc) + " %)", 10, 1);
+
+        negativeCells = negativeCells - negativeCellsToRemove;
+
+        posPerc = (positiveCells * Math.pow(totalCells, -1)) * 100;
+        negPerc = (negativeCells * Math.pow(totalCells, -1)) * 100;
+
+        jTable2.setValueAt(positiveCells + " (" + f.format(posPerc) + " %)", 11, 1);
+        jTable2.setValueAt(positiveCells + " (" + f.format(negPerc) + " %)", 12, 1);
+
+        int cellsToExport = positiveCells + negativeCells;
+        jTable2.setValueAt(cellsToExport, 13, 1);
+
+        jTable2.setValueAt((int)(cellsToExport * Integer.parseInt(pathSettingsFile.get("training_set_size") + "") * 0.01), 14, 1);
+        jTable2.setValueAt((int)(cellsToExport * Integer.parseInt(pathSettingsFile.get("testing_set_size") + "") * 0.01), 15, 1);
+
     }
 
     public void sliderUpdate(int value) {

@@ -33,8 +33,8 @@ public class CellPanel extends JPanel {
         this.settingsFile = settingsFile;
 
         paintCells(blackCellFlag);
-        
-        this.setToolTipText("Cell number: "+cellIndex);
+
+        this.setToolTipText("Cell number: " + cellIndex);
 
         this.setOpaque(false);
         this.addMouseListener(new MouseAdapter() {
