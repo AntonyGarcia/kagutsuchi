@@ -3,6 +3,8 @@ package com.wpi.kagutsuchi;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Graphics;
+import java.awt.event.ItemEvent;
+import java.awt.event.ItemListener;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.io.BufferedReader;
@@ -54,6 +56,7 @@ public class JFrameWindow extends javax.swing.JFrame {
             Dimension height = getSize();
             ImageIcon Img = new ImageIcon(mainSettingsFile.get("images_path") + "/" + jTable1.getValueAt(jTable1.getSelectedRow(), 0));
             grafico.drawImage(Img.getImage(), 0, 0, 1000, 750, null);
+
             setOpaque(false);
             super.paintComponent(grafico);
         }
@@ -64,6 +67,27 @@ public class JFrameWindow extends javax.swing.JFrame {
         try {
             loadMainSettings();
             loadImagesTable();
+
+            jComboBox4.addItemListener(new ItemListener() {
+                public void itemStateChanged(ItemEvent arg0) {
+                    if (loadFlag) {
+                        pathSettingsFile.put("black_cell_removal_rate", jComboBox4.getSelectedIndex());
+                        saveTextFile(mainSettingsFile.get("images_path") + "\\settings.json", pathSettingsFile.toJSONString());
+                    }
+                }
+            });
+
+            jComboBox3.addItemListener(new ItemListener() {
+                public void itemStateChanged(ItemEvent arg0) {
+                    if (loadFlag) {
+                        String str = jComboBox3.getSelectedItem() + "";
+                        pathSettingsFile.put("training_set_size", str.substring(0, str.indexOf("-")));
+                        pathSettingsFile.put("testing_set_size", str.substring(str.indexOf("-") + 1));
+                        saveTextFile(mainSettingsFile.get("images_path") + "\\settings.json", pathSettingsFile.toJSONString());
+                    }
+                }
+            });
+
             ListSelectionModel selectionModel = jTable1.getSelectionModel();
 
             selectionModel.addListSelectionListener(new ListSelectionListener() {
@@ -105,6 +129,9 @@ public class JFrameWindow extends javax.swing.JFrame {
 
         buildDatasetTable();
         updateDatasetInfomation();
+
+        jScrollPane3.getVerticalScrollBar().setUnitIncrement(10);
+
         loadFlag = true;
 
     }
@@ -115,10 +142,30 @@ public class JFrameWindow extends javax.swing.JFrame {
             JSONParser parser = new JSONParser();
             mainSettingsFile = (JSONObject) parser.parse(getSettingFile("settings.json"));
             pathSettingsFile = (JSONObject) parser.parse(getSettingFile(mainSettingsFile.get("images_path") + "\\settings.json"));
-            jSlider1.setValue(Integer.parseInt("" + pathSettingsFile.get("grid_resolution")));
             sliderUpdate(Integer.parseInt("" + pathSettingsFile.get("grid_resolution")));
 
+            jSlider1.setValue(Integer.parseInt(pathSettingsFile.get("grid_resolution") + ""));
+            jSlider2.setValue(Integer.parseInt(pathSettingsFile.get("black_pixel_color_threshold") + ""));
+            jSlider3.setValue(Integer.parseInt(pathSettingsFile.get("black_pixel_count_limit") + ""));
+
+            if (String.valueOf(pathSettingsFile.get("frame_rotation")).equals("1")) {
+                jCheckBox1.setSelected(true);
+            }
+
+            if (String.valueOf(pathSettingsFile.get("frame_flip")).equals("1")) {
+                jCheckBox3.setSelected(true);
+            }
+            if (String.valueOf(pathSettingsFile.get("frame_flip_rotation")).equals("1")) {
+                jCheckBox4.setSelected(true);
+            }
+            if (String.valueOf(pathSettingsFile.get("remove_surplus")).equals("1")) {
+                jCheckBox5.setSelected(true);
+            }
+
+            jComboBox4.setSelectedIndex(Integer.parseInt(pathSettingsFile.get("black_cell_removal_rate") + ""));
+            jComboBox3.setSelectedItem(pathSettingsFile.get("training_set_size") + "-" + pathSettingsFile.get("testing_set_size"));
         } catch (Exception e) {
+            System.out.println(e.getMessage());
             sliderUpdate(5);
         }
         jTable1.grabFocus();
@@ -194,7 +241,7 @@ public class JFrameWindow extends javax.swing.JFrame {
         cellNumber = 0;
         for (int j = 0; j < loopsY; j++) {
             for (int i = 0; i < loopsX; i++) {
-                CellPanel cell = new CellPanel(jTable1.getValueAt(jTable1.getSelectedRow(), 0) + "", cellNumber, pathSettingsFile,jCheckBox2.isSelected());
+                CellPanel cell = new CellPanel(jTable1.getValueAt(jTable1.getSelectedRow(), 0) + "", cellNumber, pathSettingsFile, jCheckBox2.isSelected());
                 cell.setBounds(((int) Math.round(resolution * scaleFactor)) * i, ((int) Math.round(resolution * scaleFactor)) * j, (int) Math.round(resolution * scaleFactor), (int) Math.round(resolution * scaleFactor));
                 jPanel1.add(cell);
                 cellNumber++;
@@ -206,7 +253,7 @@ public class JFrameWindow extends javax.swing.JFrame {
 
     public void buildDatasetTable() {
         DefaultTableModel model = (DefaultTableModel) jTable2.getModel();
-        for (int i = 0; i < 11; i++) {
+        for (int i = 0; i < 13; i++) {
             model.addRow(new Object[]{"", ""});
         }
         model.setValueAt("Images count", 0, 0);
@@ -216,10 +263,13 @@ public class JFrameWindow extends javax.swing.JFrame {
         model.setValueAt("Cells per image", 4, 0);
         model.setValueAt("Total positive cells", 5, 0);
         model.setValueAt("Total negative cells", 6, 0);
-        model.setValueAt("Generated positive cells", 7, 0);
-        model.setValueAt("Positive cells to export", 8, 0);
-        model.setValueAt("Negative cells to export", 9, 0);
-        model.setValueAt("Cells to export", 10, 0);
+        model.setValueAt("Black cells", 7, 0);
+        model.setValueAt("Generated positive cells", 8, 0);
+        model.setValueAt("Negative cells to remove", 9, 0);
+        model.setValueAt("Positive cells to export", 10, 0);
+        model.setValueAt("Negative cells to export", 11, 0);
+
+        model.setValueAt("Cells to export", 12, 0);
     }
 
     public void updateDatasetInfomation() {
@@ -232,14 +282,49 @@ public class JFrameWindow extends javax.swing.JFrame {
         int totalCells = imagesPerCell * jTable1.getRowCount();
         int positiveCells = 0;
         int negativeCells = 0;
+        int blackCells = 0;
+        int genPostCells = 0;
+        int cellsToRemove = 0;
 
         for (int i = 0; i < imagesList.size(); i++) {
             JSONArray gridArray = (JSONArray) ((JSONObject) ((JSONArray) pathSettingsFile.get("positive_cells")).get(0)).get(imagesList.get(i));
             positiveCells = positiveCells + gridArray.size();
         }
+        for (int i = 0; i < imagesList.size(); i++) {
+            JSONArray gridArray = (JSONArray) ((JSONObject) ((JSONArray) pathSettingsFile.get("black_cells")).get(0)).get(imagesList.get(i));
+            blackCells = blackCells + gridArray.size();
+        }
+
+        if (jCheckBox1.isSelected()) {
+            genPostCells = genPostCells + (positiveCells * 3);
+        }
+        if (jCheckBox3.isSelected()) {
+            genPostCells = genPostCells + positiveCells;
+        }
+        if (jCheckBox4.isSelected()) {
+            genPostCells = genPostCells + (positiveCells * 3);
+        }
+
         negativeCells = totalCells - positiveCells;
+
+        if (jCheckBox5.isSelected()) {
+            cellsToRemove = negativeCells - positiveCells;
+        }
+
         double posPerc = (positiveCells * Math.pow(totalCells, -1)) * 100;
         double negPerc = (negativeCells * Math.pow(totalCells, -1)) * 100;
+        double blackPerc = (blackCells * Math.pow(totalCells, -1)) * 100;
+        double genPerc = (genPostCells * Math.pow(totalCells, -1)) * 100;
+        totalCells = positiveCells + genPostCells + negativeCells - blackCells;
+        if (jCheckBox5.isSelected()) {
+            cellsToRemove = negativeCells - blackCells - positiveCells - genPostCells;
+        }
+        double remPerc = (cellsToRemove * Math.pow(totalCells, -1)) * 100;
+
+        double fixedPosPerc = ((positiveCells + genPostCells) * Math.pow(totalCells, -1)) * 100;
+        double fixedNegPerc = ((negativeCells - blackCells - cellsToRemove) * Math.pow(totalCells, -1)) * 100;
+
+        totalCells = positiveCells + genPostCells + negativeCells - blackCells - cellsToRemove;
 
         jTable2.setValueAt(jTable1.getRowCount(), 0, 1);
         jTable2.setValueAt(w + " x " + h + " px", 1, 1);
@@ -248,7 +333,12 @@ public class JFrameWindow extends javax.swing.JFrame {
         jTable2.setValueAt(imagesPerCell, 4, 1);
         jTable2.setValueAt(positiveCells + " (" + f.format(posPerc) + " %)", 5, 1);
         jTable2.setValueAt(negativeCells + " (" + f.format(negPerc) + " %)", 6, 1);
-
+        jTable2.setValueAt(blackCells + " (" + f.format(blackPerc) + " %)", 7, 1);
+        jTable2.setValueAt(genPostCells + " (" + f.format(genPerc) + " %)", 8, 1);
+        jTable2.setValueAt(cellsToRemove + " (" + f.format(remPerc) + " %)", 9, 1);
+        jTable2.setValueAt((positiveCells + genPostCells) + " (" + f.format(fixedPosPerc) + " %)", 10, 1);
+        jTable2.setValueAt((negativeCells - blackCells - cellsToRemove) + " (" + f.format(fixedNegPerc) + " %)", 11, 1);
+        jTable2.setValueAt(totalCells + "", 12, 1);
     }
 
     public void sliderUpdate(int value) {
@@ -280,8 +370,12 @@ public class JFrameWindow extends javax.swing.JFrame {
         jScrollPane1 = new javax.swing.JScrollPane();
         jTable1 = new javax.swing.JTable();
         jButton2 = new javax.swing.JButton();
-        jTabbedPane1 = new javax.swing.JTabbedPane();
-        jPanel6 = new javax.swing.JPanel();
+        jPanel7 = new javax.swing.JPanel();
+        jSlider1 = new javax.swing.JSlider();
+        jScrollPane2 = new javax.swing.JScrollPane();
+        jTable2 = new javax.swing.JTable();
+        jScrollPane3 = new javax.swing.JScrollPane();
+        jPanel10 = new javax.swing.JPanel();
         jPanel3 = new javax.swing.JPanel();
         jToggleButton1 = new javax.swing.JToggleButton();
         jToggleButton2 = new javax.swing.JToggleButton();
@@ -297,18 +391,24 @@ public class JFrameWindow extends javax.swing.JFrame {
         jComboBox1 = new javax.swing.JComboBox<>();
         jComboBox2 = new javax.swing.JComboBox<>();
         jLabel7 = new javax.swing.JLabel();
-        jPanel4 = new javax.swing.JPanel();
         jPanel8 = new javax.swing.JPanel();
         jCheckBox2 = new javax.swing.JCheckBox();
         jSlider2 = new javax.swing.JSlider();
         jLabel1 = new javax.swing.JLabel();
-        jPanel7 = new javax.swing.JPanel();
-        jSlider1 = new javax.swing.JSlider();
-        jScrollPane2 = new javax.swing.JScrollPane();
-        jTable2 = new javax.swing.JTable();
+        jLabel2 = new javax.swing.JLabel();
+        jSlider3 = new javax.swing.JSlider();
+        jPanel9 = new javax.swing.JPanel();
+        jCheckBox1 = new javax.swing.JCheckBox();
+        jCheckBox3 = new javax.swing.JCheckBox();
+        jCheckBox4 = new javax.swing.JCheckBox();
+        jLabel3 = new javax.swing.JLabel();
+        jComboBox3 = new javax.swing.JComboBox<>();
+        jLabel8 = new javax.swing.JLabel();
+        jComboBox4 = new javax.swing.JComboBox<>();
+        jCheckBox5 = new javax.swing.JCheckBox();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
-        setPreferredSize(new java.awt.Dimension(1330, 810));
+        setPreferredSize(new java.awt.Dimension(1375, 810));
         setResizable(false);
         setSize(new java.awt.Dimension(1330, 800));
 
@@ -323,7 +423,7 @@ public class JFrameWindow extends javax.swing.JFrame {
         );
         jPanel1Layout.setVerticalGroup(
             jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 746, Short.MAX_VALUE)
+            .addGap(0, 0, Short.MAX_VALUE)
         );
 
         jPanel2.setBorder(javax.swing.BorderFactory.createEtchedBorder());
@@ -373,10 +473,64 @@ public class JFrameWindow extends javax.swing.JFrame {
             }
         });
 
-        jTabbedPane1.setBorder(javax.swing.BorderFactory.createEmptyBorder(1, 1, 1, 1));
-        jTabbedPane1.setFont(new java.awt.Font("Abel", 0, 14)); // NOI18N
+        jPanel7.setBorder(javax.swing.BorderFactory.createTitledBorder(javax.swing.BorderFactory.createEtchedBorder(), "Grid resolution (480 px)", javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION, javax.swing.border.TitledBorder.DEFAULT_POSITION, new java.awt.Font("Abel", 0, 14))); // NOI18N
+
+        jSlider1.setMaximum(5);
+        jSlider1.setMinimum(1);
+        jSlider1.setExtent(50);
+        jSlider1.addChangeListener(new javax.swing.event.ChangeListener() {
+            public void stateChanged(javax.swing.event.ChangeEvent evt) {
+                jSlider1StateChanged(evt);
+            }
+        });
+
+        javax.swing.GroupLayout jPanel7Layout = new javax.swing.GroupLayout(jPanel7);
+        jPanel7.setLayout(jPanel7Layout);
+        jPanel7Layout.setHorizontalGroup(
+            jPanel7Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(jPanel7Layout.createSequentialGroup()
+                .addContainerGap()
+                .addComponent(jSlider1, javax.swing.GroupLayout.DEFAULT_SIZE, 295, Short.MAX_VALUE)
+                .addContainerGap())
+        );
+        jPanel7Layout.setVerticalGroup(
+            jPanel7Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(jPanel7Layout.createSequentialGroup()
+                .addGap(5, 5, 5)
+                .addComponent(jSlider1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(5, 5, 5))
+        );
+
+        jTable2.setFont(new java.awt.Font("Abel", 0, 14)); // NOI18N
+        jTable2.setModel(new javax.swing.table.DefaultTableModel(
+            new Object [][] {
+
+            },
+            new String [] {
+                "Parameter", "Value"
+            }
+        ) {
+            boolean[] canEdit = new boolean [] {
+                false, false
+            };
+
+            public boolean isCellEditable(int rowIndex, int columnIndex) {
+                return canEdit [columnIndex];
+            }
+        });
+        jScrollPane2.setViewportView(jTable2);
+        if (jTable2.getColumnModel().getColumnCount() > 0) {
+            jTable2.getColumnModel().getColumn(0).setResizable(false);
+            jTable2.getColumnModel().getColumn(0).setPreferredWidth(140);
+            jTable2.getColumnModel().getColumn(1).setResizable(false);
+            jTable2.getColumnModel().getColumn(1).setPreferredWidth(110);
+        }
+
+        jPanel10.setPreferredSize(new java.awt.Dimension(180, 600));
 
         jPanel3.setBorder(javax.swing.BorderFactory.createTitledBorder(javax.swing.BorderFactory.createEtchedBorder(), "Filling Pattern", javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION, javax.swing.border.TitledBorder.DEFAULT_POSITION, new java.awt.Font("Abel", 0, 14))); // NOI18N
+        jPanel3.setMaximumSize(new java.awt.Dimension(220, 63));
+        jPanel3.setPreferredSize(new java.awt.Dimension(260, 63));
 
         jToggleButton1.setIcon(new javax.swing.ImageIcon("C:\\Users\\Antony Garcia\\Desktop\\wpi\\kagutsuchi\\java\\kagutsuchi\\src\\main\\java\\ui_images\\1.jpg")); // NOI18N
         jToggleButton1.setMaximumSize(new java.awt.Dimension(32, 31));
@@ -458,7 +612,7 @@ public class JFrameWindow extends javax.swing.JFrame {
                 .addComponent(jToggleButton5, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(jToggleButton6, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(45, Short.MAX_VALUE))
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
         jPanel3Layout.setVerticalGroup(
             jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -474,6 +628,7 @@ public class JFrameWindow extends javax.swing.JFrame {
         );
 
         jPanel5.setBorder(javax.swing.BorderFactory.createTitledBorder(javax.swing.BorderFactory.createEtchedBorder(), "Filling Parameters", javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION, javax.swing.border.TitledBorder.DEFAULT_POSITION, new java.awt.Font("Abel", 0, 14))); // NOI18N
+        jPanel5.setPreferredSize(new java.awt.Dimension(220, 136));
 
         jLabel4.setFont(new java.awt.Font("Abel", 0, 14)); // NOI18N
         jLabel4.setText("Final width and height: ");
@@ -543,31 +698,6 @@ public class JFrameWindow extends javax.swing.JFrame {
                 .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
 
-        javax.swing.GroupLayout jPanel6Layout = new javax.swing.GroupLayout(jPanel6);
-        jPanel6.setLayout(jPanel6Layout);
-        jPanel6Layout.setHorizontalGroup(
-            jPanel6Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(jPanel6Layout.createSequentialGroup()
-                .addGap(5, 5, 5)
-                .addComponent(jPanel3, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                .addGap(4, 4, 4))
-            .addGroup(jPanel6Layout.createSequentialGroup()
-                .addGap(5, 5, 5)
-                .addComponent(jPanel5, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                .addGap(5, 5, 5))
-        );
-        jPanel6Layout.setVerticalGroup(
-            jPanel6Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(jPanel6Layout.createSequentialGroup()
-                .addGap(5, 5, 5)
-                .addComponent(jPanel3, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(5, 5, 5)
-                .addComponent(jPanel5, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-        );
-
-        jTabbedPane1.addTab("Export settings", jPanel6);
-
         jPanel8.setBorder(javax.swing.BorderFactory.createTitledBorder(javax.swing.BorderFactory.createEtchedBorder(), "Black cells identification", javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION, javax.swing.border.TitledBorder.DEFAULT_POSITION, new java.awt.Font("Abel", 0, 14))); // NOI18N
         jPanel8.setFont(new java.awt.Font("Abel", 0, 14)); // NOI18N
 
@@ -580,16 +710,39 @@ public class JFrameWindow extends javax.swing.JFrame {
             }
         });
 
+        jSlider2.setMaximum(25);
         jSlider2.setValue(10);
         jSlider2.addChangeListener(new javax.swing.event.ChangeListener() {
             public void stateChanged(javax.swing.event.ChangeEvent evt) {
                 jSlider2StateChanged(evt);
             }
         });
+        jSlider2.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseReleased(java.awt.event.MouseEvent evt) {
+                jSlider2MouseReleased(evt);
+            }
+        });
 
         jLabel1.setFont(new java.awt.Font("Abel", 0, 14)); // NOI18N
         jLabel1.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
         jLabel1.setText("Black pixel threshold: 10");
+
+        jLabel2.setFont(new java.awt.Font("Abel", 0, 14)); // NOI18N
+        jLabel2.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
+        jLabel2.setText("Black cell pixel count:  90%");
+
+        jSlider3.setMinimum(80);
+        jSlider3.setValue(90);
+        jSlider3.addChangeListener(new javax.swing.event.ChangeListener() {
+            public void stateChanged(javax.swing.event.ChangeEvent evt) {
+                jSlider3StateChanged(evt);
+            }
+        });
+        jSlider3.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseReleased(java.awt.event.MouseEvent evt) {
+                jSlider3MouseReleased(evt);
+            }
+        });
 
         javax.swing.GroupLayout jPanel8Layout = new javax.swing.GroupLayout(jPanel8);
         jPanel8.setLayout(jPanel8Layout);
@@ -600,109 +753,180 @@ public class JFrameWindow extends javax.swing.JFrame {
                 .addComponent(jCheckBox2)
                 .addGap(5, 5, 5)
                 .addGroup(jPanel8Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(jSlider2, javax.swing.GroupLayout.DEFAULT_SIZE, 207, Short.MAX_VALUE)
-                    .addComponent(jLabel1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                    .addComponent(jSlider2, javax.swing.GroupLayout.DEFAULT_SIZE, 224, Short.MAX_VALUE)
+                    .addComponent(jLabel1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addComponent(jLabel2, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addComponent(jSlider3, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
                 .addGap(2, 2, 2))
         );
         jPanel8Layout.setVerticalGroup(
             jPanel8Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addComponent(jCheckBox2, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
             .addGroup(jPanel8Layout.createSequentialGroup()
-                .addGroup(jPanel8Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(jCheckBox2, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addGroup(jPanel8Layout.createSequentialGroup()
-                        .addGap(2, 2, 2)
-                        .addComponent(jLabel1)
-                        .addGap(4, 4, 4)
-                        .addComponent(jSlider2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)))
-                .addGap(4, 4, 4))
+                .addGap(2, 2, 2)
+                .addComponent(jLabel1)
+                .addGap(4, 4, 4)
+                .addComponent(jSlider2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(4, 4, 4)
+                .addComponent(jLabel2)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(jSlider3, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(0, 0, Short.MAX_VALUE))
         );
 
-        javax.swing.GroupLayout jPanel4Layout = new javax.swing.GroupLayout(jPanel4);
-        jPanel4.setLayout(jPanel4Layout);
-        jPanel4Layout.setHorizontalGroup(
-            jPanel4Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel4Layout.createSequentialGroup()
-                .addGap(5, 5, 5)
-                .addComponent(jPanel8, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                .addGap(5, 5, 5))
-        );
-        jPanel4Layout.setVerticalGroup(
-            jPanel4Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(jPanel4Layout.createSequentialGroup()
-                .addGap(5, 5, 5)
-                .addComponent(jPanel8, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(140, Short.MAX_VALUE))
-        );
+        jPanel9.setBorder(javax.swing.BorderFactory.createTitledBorder(javax.swing.BorderFactory.createEtchedBorder(), "Output dataset settings", javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION, javax.swing.border.TitledBorder.DEFAULT_POSITION, new java.awt.Font("Abel", 0, 14))); // NOI18N
+        jPanel9.setFont(new java.awt.Font("Abel", 0, 14)); // NOI18N
 
-        jTabbedPane1.addTab("Dataset settings", jPanel4);
-
-        jPanel7.setBorder(javax.swing.BorderFactory.createTitledBorder(javax.swing.BorderFactory.createEtchedBorder(), "Grid resolution (480 px)", javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION, javax.swing.border.TitledBorder.DEFAULT_POSITION, new java.awt.Font("Abel", 0, 14))); // NOI18N
-
-        jSlider1.setMaximum(5);
-        jSlider1.setMinimum(1);
-        jSlider1.setExtent(50);
-        jSlider1.addChangeListener(new javax.swing.event.ChangeListener() {
+        jCheckBox1.setFont(new java.awt.Font("Abel", 0, 14)); // NOI18N
+        jCheckBox1.setText("Positive frames rotation (90º, 180º, 270º)");
+        jCheckBox1.addChangeListener(new javax.swing.event.ChangeListener() {
             public void stateChanged(javax.swing.event.ChangeEvent evt) {
-                jSlider1StateChanged(evt);
+                jCheckBox1StateChanged(evt);
             }
         });
 
-        javax.swing.GroupLayout jPanel7Layout = new javax.swing.GroupLayout(jPanel7);
-        jPanel7.setLayout(jPanel7Layout);
-        jPanel7Layout.setHorizontalGroup(
-            jPanel7Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(jPanel7Layout.createSequentialGroup()
-                .addContainerGap()
-                .addComponent(jSlider1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+        jCheckBox3.setFont(new java.awt.Font("Abel", 0, 14)); // NOI18N
+        jCheckBox3.setText("Positive frames horizontal flip (mirror)");
+        jCheckBox3.addChangeListener(new javax.swing.event.ChangeListener() {
+            public void stateChanged(javax.swing.event.ChangeEvent evt) {
+                jCheckBox3StateChanged(evt);
+            }
+        });
+
+        jCheckBox4.setFont(new java.awt.Font("Abel", 0, 14)); // NOI18N
+        jCheckBox4.setText("Flipped frames rotation (90º, 180º, 270º)");
+        jCheckBox4.addChangeListener(new javax.swing.event.ChangeListener() {
+            public void stateChanged(javax.swing.event.ChangeEvent evt) {
+                jCheckBox4StateChanged(evt);
+            }
+        });
+
+        jLabel3.setFont(new java.awt.Font("Abel", 0, 14)); // NOI18N
+        jLabel3.setText("  Black cells removal rate:  ");
+
+        jComboBox3.setFont(new java.awt.Font("Abel", 0, 14)); // NOI18N
+        jComboBox3.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "50-50", "60-40", "70-30", "80-20", "90-10" }));
+        jComboBox3.setSelectedItem("80-20");
+
+        jLabel8.setFont(new java.awt.Font("Abel", 0, 14)); // NOI18N
+        jLabel8.setText("  Training-testing datasets ratio: ");
+
+        jComboBox4.setFont(new java.awt.Font("Abel", 0, 14)); // NOI18N
+        jComboBox4.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "0 %", "10 %", "20 %", "30 %", "40 %", "50 %", "60 %", "70 %", "80 %", "90 %", "100 %" }));
+        jComboBox4.setSelectedItem("50 %");
+
+        jCheckBox5.setFont(new java.awt.Font("Abel", 0, 14)); // NOI18N
+        jCheckBox5.setText("Remove surplus of negative frames");
+        jCheckBox5.addChangeListener(new javax.swing.event.ChangeListener() {
+            public void stateChanged(javax.swing.event.ChangeEvent evt) {
+                jCheckBox5StateChanged(evt);
+            }
+        });
+
+        javax.swing.GroupLayout jPanel9Layout = new javax.swing.GroupLayout(jPanel9);
+        jPanel9.setLayout(jPanel9Layout);
+        jPanel9Layout.setHorizontalGroup(
+            jPanel9Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(jPanel9Layout.createSequentialGroup()
+                .addGap(4, 4, 4)
+                .addGroup(jPanel9Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(jCheckBox1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addComponent(jCheckBox3, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addComponent(jCheckBox4, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addGroup(jPanel9Layout.createSequentialGroup()
+                        .addComponent(jLabel3)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(jComboBox4, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGap(0, 0, Short.MAX_VALUE))
+                    .addGroup(jPanel9Layout.createSequentialGroup()
+                        .addComponent(jLabel8)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(jComboBox3, 0, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                    .addComponent(jCheckBox5, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
                 .addContainerGap())
         );
-        jPanel7Layout.setVerticalGroup(
-            jPanel7Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(jPanel7Layout.createSequentialGroup()
-                .addGap(5, 5, 5)
-                .addComponent(jSlider1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(5, 5, 5))
+        jPanel9Layout.setVerticalGroup(
+            jPanel9Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(jPanel9Layout.createSequentialGroup()
+                .addComponent(jCheckBox1)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(jCheckBox3)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(jCheckBox4)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGroup(jPanel9Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(jLabel3, javax.swing.GroupLayout.PREFERRED_SIZE, 25, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(jComboBox4, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGroup(jPanel9Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(jComboBox3, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(jLabel8, javax.swing.GroupLayout.PREFERRED_SIZE, 25, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(jCheckBox5)
+                .addContainerGap(111, Short.MAX_VALUE))
         );
 
-        jTable2.setFont(new java.awt.Font("Abel", 0, 14)); // NOI18N
-        jTable2.setModel(new javax.swing.table.DefaultTableModel(
-            new Object [][] {
+        javax.swing.GroupLayout jPanel10Layout = new javax.swing.GroupLayout(jPanel10);
+        jPanel10.setLayout(jPanel10Layout);
+        jPanel10Layout.setHorizontalGroup(
+            jPanel10Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(jPanel10Layout.createSequentialGroup()
+                .addContainerGap()
+                .addGroup(jPanel10Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(jPanel10Layout.createSequentialGroup()
+                        .addComponent(jPanel3, javax.swing.GroupLayout.DEFAULT_SIZE, 304, Short.MAX_VALUE)
+                        .addGap(6, 6, 6))
+                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel10Layout.createSequentialGroup()
+                        .addComponent(jPanel9, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addContainerGap())
+                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel10Layout.createSequentialGroup()
+                        .addGroup(jPanel10Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
+                            .addComponent(jPanel8, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                            .addComponent(jPanel5, javax.swing.GroupLayout.DEFAULT_SIZE, 304, Short.MAX_VALUE))
+                        .addContainerGap())))
+        );
+        jPanel10Layout.setVerticalGroup(
+            jPanel10Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(jPanel10Layout.createSequentialGroup()
+                .addContainerGap()
+                .addComponent(jPanel3, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(jPanel5, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(jPanel8, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(jPanel9, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addContainerGap())
+        );
 
-            },
-            new String [] {
-                "Parameter", "Value"
-            }
-        ) {
-            boolean[] canEdit = new boolean [] {
-                false, false
-            };
-
-            public boolean isCellEditable(int rowIndex, int columnIndex) {
-                return canEdit [columnIndex];
-            }
-        });
-        jScrollPane2.setViewportView(jTable2);
-        if (jTable2.getColumnModel().getColumnCount() > 0) {
-            jTable2.getColumnModel().getColumn(0).setResizable(false);
-            jTable2.getColumnModel().getColumn(0).setPreferredWidth(140);
-            jTable2.getColumnModel().getColumn(1).setResizable(false);
-            jTable2.getColumnModel().getColumn(1).setPreferredWidth(110);
-        }
+        jScrollPane3.setViewportView(jPanel10);
 
         javax.swing.GroupLayout jPanel2Layout = new javax.swing.GroupLayout(jPanel2);
         jPanel2.setLayout(jPanel2Layout);
         jPanel2Layout.setHorizontalGroup(
             jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel2Layout.createSequentialGroup()
+            .addGroup(jPanel2Layout.createSequentialGroup()
                 .addGap(5, 5, 5)
-                .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
-                    .addComponent(jTabbedPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 299, Short.MAX_VALUE)
-                    .addComponent(jButton2, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(jButton1, javax.swing.GroupLayout.Alignment.LEADING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(jPanel7, javax.swing.GroupLayout.Alignment.LEADING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 0, Short.MAX_VALUE)
-                    .addComponent(jScrollPane2, javax.swing.GroupLayout.Alignment.LEADING, javax.swing.GroupLayout.PREFERRED_SIZE, 0, Short.MAX_VALUE))
-                .addGap(5, 5, 5))
+                .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(jPanel2Layout.createSequentialGroup()
+                        .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
+                            .addComponent(jButton1, javax.swing.GroupLayout.Alignment.LEADING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                            .addComponent(jPanel7, javax.swing.GroupLayout.Alignment.LEADING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                        .addGap(5, 5, 5))
+                    .addGroup(jPanel2Layout.createSequentialGroup()
+                        .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
+                            .addComponent(jScrollPane1, javax.swing.GroupLayout.Alignment.LEADING, javax.swing.GroupLayout.PREFERRED_SIZE, 0, Short.MAX_VALUE)
+                            .addComponent(jScrollPane2, javax.swing.GroupLayout.PREFERRED_SIZE, 0, Short.MAX_VALUE))
+                        .addContainerGap())))
+            .addGroup(jPanel2Layout.createSequentialGroup()
+                .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(jPanel2Layout.createSequentialGroup()
+                        .addContainerGap()
+                        .addComponent(jButton2, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                    .addGroup(jPanel2Layout.createSequentialGroup()
+                        .addGap(5, 5, 5)
+                        .addComponent(jScrollPane3)))
+                .addContainerGap())
         );
         jPanel2Layout.setVerticalGroup(
             jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -715,11 +939,11 @@ public class JFrameWindow extends javax.swing.JFrame {
                 .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 125, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(jScrollPane2, javax.swing.GroupLayout.PREFERRED_SIZE, 208, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(jTabbedPane1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addGap(5, 5, 5)
+                .addComponent(jScrollPane3, javax.swing.GroupLayout.DEFAULT_SIZE, 662, Short.MAX_VALUE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(jButton2, javax.swing.GroupLayout.PREFERRED_SIZE, 30, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(10, Short.MAX_VALUE))
+                .addContainerGap())
         );
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
@@ -730,7 +954,7 @@ public class JFrameWindow extends javax.swing.JFrame {
                 .addContainerGap()
                 .addComponent(jPanel1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addGap(5, 5, 5)
-                .addComponent(jPanel2, javax.swing.GroupLayout.DEFAULT_SIZE, 313, Short.MAX_VALUE)
+                .addComponent(jPanel2, javax.swing.GroupLayout.DEFAULT_SIZE, 333, Short.MAX_VALUE)
                 .addContainerGap())
         );
         layout.setVerticalGroup(
@@ -738,9 +962,9 @@ public class JFrameWindow extends javax.swing.JFrame {
             .addGroup(layout.createSequentialGroup()
                 .addContainerGap()
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(jPanel1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addComponent(jPanel2, javax.swing.GroupLayout.PREFERRED_SIZE, 750, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                    .addComponent(jPanel1, javax.swing.GroupLayout.DEFAULT_SIZE, 1154, Short.MAX_VALUE)
+                    .addComponent(jPanel2, javax.swing.GroupLayout.DEFAULT_SIZE, 1154, Short.MAX_VALUE))
+                .addContainerGap())
         );
 
         pack();
@@ -779,8 +1003,7 @@ public class JFrameWindow extends javax.swing.JFrame {
             pathSettingsFile.put("filling_gap", (int) (Integer.parseInt(jTextField1.getText()) - cellSize));
             pathSettingsFile.put("output_color_scale", jComboBox2.getSelectedIndex() + "");
 
-            new ImageHandler(mainSettingsFile, pathSettingsFile, imagesList).deadCellsSearch();
-
+            new ImageHandler(mainSettingsFile, pathSettingsFile, imagesList).test();
             saveTextFile(mainSettingsFile.get("images_path") + "\\settings.json", pathSettingsFile.toJSONString());
 
         } catch (Exception e) {
@@ -867,6 +1090,7 @@ public class JFrameWindow extends javax.swing.JFrame {
         Component[] cells = jPanel1.getComponents();
         if (jCheckBox2.isSelected()) {
             jSlider2.setEnabled(true);
+
             for (int i = 0; i < cells.length - 1; i++) {
                 ((CellPanel) cells[i]).paintCells(true);
             }
@@ -879,10 +1103,101 @@ public class JFrameWindow extends javax.swing.JFrame {
     }//GEN-LAST:event_jCheckBox2ActionPerformed
 
     private void jSlider2StateChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:event_jSlider2StateChanged
+
         jLabel1.setText("Black pixel threshold: " + jSlider2.getValue());
 
-
     }//GEN-LAST:event_jSlider2StateChanged
+
+    private void jSlider2MouseReleased(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_jSlider2MouseReleased
+        try {
+            pathSettingsFile.put("black_pixel_color_threshold", jSlider2.getValue() + "");
+            pathSettingsFile.put("black_pixel_count_limit", jSlider3.getValue() + "");
+            Component[] cells = jPanel1.getComponents();
+            new ImageHandler(mainSettingsFile, pathSettingsFile, imagesList).deadCellsSearch();
+            Thread.sleep(250);
+            for (int i = 0; i < cells.length - 1; i++) {
+                ((CellPanel) cells[i]).paintCells(true);
+            }
+            saveTextFile(mainSettingsFile.get("images_path") + "\\settings.json", pathSettingsFile.toJSONString());
+            updateDatasetInfomation();
+        } catch (InterruptedException ex) {
+            Logger.getLogger(JFrameWindow.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }//GEN-LAST:event_jSlider2MouseReleased
+
+    private void jSlider3StateChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:event_jSlider3StateChanged
+        jLabel2.setText("Black cell pixel count: " + jSlider3.getValue() + "%");
+    }//GEN-LAST:event_jSlider3StateChanged
+
+    private void jSlider3MouseReleased(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_jSlider3MouseReleased
+        try {
+            pathSettingsFile.put("black_pixel_color_threshold", jSlider2.getValue() + "");
+            pathSettingsFile.put("black_pixel_count_limit", jSlider3.getValue() + "");
+            Component[] cells = jPanel1.getComponents();
+            new ImageHandler(mainSettingsFile, pathSettingsFile, imagesList).deadCellsSearch();
+            Thread.sleep(250);
+            for (int i = 0; i < cells.length - 1; i++) {
+                ((CellPanel) cells[i]).paintCells(true);
+            }
+            saveTextFile(mainSettingsFile.get("images_path") + "\\settings.json", pathSettingsFile.toJSONString());
+            updateDatasetInfomation();
+        } catch (InterruptedException ex) {
+            Logger.getLogger(JFrameWindow.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }//GEN-LAST:event_jSlider3MouseReleased
+
+    private void jCheckBox1StateChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:event_jCheckBox1StateChanged
+        if (loadFlag) {
+            if (jCheckBox1.isSelected()) {
+                pathSettingsFile.put("frame_rotation", "1");
+            } else {
+                pathSettingsFile.put("frame_rotation", "0");
+            }
+
+            updateDatasetInfomation();
+            saveTextFile(mainSettingsFile.get("images_path") + "\\settings.json", pathSettingsFile.toJSONString());
+        }
+    }//GEN-LAST:event_jCheckBox1StateChanged
+
+    private void jCheckBox3StateChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:event_jCheckBox3StateChanged
+        if (loadFlag) {
+            if (jCheckBox3.isSelected()) {
+                pathSettingsFile.put("frame_flip", "1");
+            } else {
+                pathSettingsFile.put("frame_flip", "0");
+            }
+
+            updateDatasetInfomation();
+            saveTextFile(mainSettingsFile.get("images_path") + "\\settings.json", pathSettingsFile.toJSONString());
+        }
+
+    }//GEN-LAST:event_jCheckBox3StateChanged
+
+    private void jCheckBox4StateChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:event_jCheckBox4StateChanged
+        if (loadFlag) {
+            if (jCheckBox4.isSelected()) {
+                pathSettingsFile.put("frame_flip_rotation", "1");
+            } else {
+                pathSettingsFile.put("frame_flip_rotation", "0");
+            }
+
+            updateDatasetInfomation();
+            saveTextFile(mainSettingsFile.get("images_path") + "\\settings.json", pathSettingsFile.toJSONString());
+        }
+    }//GEN-LAST:event_jCheckBox4StateChanged
+
+    private void jCheckBox5StateChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:event_jCheckBox5StateChanged
+        if (loadFlag) {
+            if (jCheckBox5.isSelected()) {
+                pathSettingsFile.put("remove_surplus", "1");
+            } else {
+                pathSettingsFile.put("remove_surplus", "0");
+            }
+
+            updateDatasetInfomation();
+            saveTextFile(mainSettingsFile.get("images_path") + "\\settings.json", pathSettingsFile.toJSONString());
+        }
+    }//GEN-LAST:event_jCheckBox5StateChanged
     public static void main(String args[]) {
         /* Set the Nimbus look and feel */
         //<editor-fold defaultstate="collapsed" desc=" Look and feel setting code (optional) ">
@@ -918,27 +1233,37 @@ public class JFrameWindow extends javax.swing.JFrame {
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton jButton1;
     private javax.swing.JButton jButton2;
+    private javax.swing.JCheckBox jCheckBox1;
     private javax.swing.JCheckBox jCheckBox2;
+    private javax.swing.JCheckBox jCheckBox3;
+    private javax.swing.JCheckBox jCheckBox4;
+    private javax.swing.JCheckBox jCheckBox5;
     private javax.swing.JComboBox<String> jComboBox1;
     private javax.swing.JComboBox<String> jComboBox2;
+    private javax.swing.JComboBox<String> jComboBox3;
+    private javax.swing.JComboBox<String> jComboBox4;
     private javax.swing.JLabel jLabel1;
+    private javax.swing.JLabel jLabel2;
+    private javax.swing.JLabel jLabel3;
     private javax.swing.JLabel jLabel4;
     private javax.swing.JLabel jLabel5;
     private javax.swing.JLabel jLabel6;
     private javax.swing.JLabel jLabel7;
+    private javax.swing.JLabel jLabel8;
     private javax.swing.JPanel jPanel1;
+    private javax.swing.JPanel jPanel10;
     private javax.swing.JPanel jPanel2;
     private javax.swing.JPanel jPanel3;
-    private javax.swing.JPanel jPanel4;
     private javax.swing.JPanel jPanel5;
-    private javax.swing.JPanel jPanel6;
     private javax.swing.JPanel jPanel7;
     private javax.swing.JPanel jPanel8;
+    private javax.swing.JPanel jPanel9;
     private javax.swing.JScrollPane jScrollPane1;
     private javax.swing.JScrollPane jScrollPane2;
+    private javax.swing.JScrollPane jScrollPane3;
     private javax.swing.JSlider jSlider1;
     private javax.swing.JSlider jSlider2;
-    private javax.swing.JTabbedPane jTabbedPane1;
+    private javax.swing.JSlider jSlider3;
     private javax.swing.JTable jTable1;
     private javax.swing.JTable jTable2;
     private javax.swing.JTextField jTextField1;

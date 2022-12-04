@@ -27,13 +27,14 @@ public class CellPanel extends JPanel {
     private String imageName;
     private JSONObject settingsFile;
 
-    public CellPanel(String imageName, int index, JSONObject settingsFile, boolean blackCell) {
+    public CellPanel(String imageName, int index, JSONObject settingsFile, boolean blackCellFlag) {
         this.imageName = imageName;
         this.cellIndex = index;
         this.settingsFile = settingsFile;
-        this.blackCell = blackCell;
 
-        paintCells(blackCell);
+        paintCells(blackCellFlag);
+        
+        this.setToolTipText("Cell number: "+cellIndex);
 
         this.setOpaque(false);
         this.addMouseListener(new MouseAdapter() {
@@ -63,6 +64,7 @@ public class CellPanel extends JPanel {
             @Override
             public void mouseClicked(MouseEvent e) {
                 super.mouseClicked(e);
+
                 if (!blackCell) {
                     selectedState = !selectedState;
                     if (selectedState) {

@@ -29,7 +29,7 @@ public class ImageHandler {
     private List<String> imageList;
     private List<ExecutorService> services = new ArrayList<>();
     private int blackThreshold = 20;
-    private int threadLimit = 1;
+    private int threadLimit = 10;
     private double blackPixelsThreshold = 0.9;
 
     public ImageHandler(JSONObject mainSettingsFile, JSONObject pathSettingsFile, List<String> imageList) {
@@ -76,6 +76,7 @@ public class ImageHandler {
 
     public void deadCellsSearch() {
 
+        services.clear();
         int res = Integer.parseInt("" + pathSettingsFile.get("cell_size"));
         int width = res;
         int height = width;
@@ -83,58 +84,83 @@ public class ImageHandler {
         int yCells = Integer.parseInt("" + pathSettingsFile.get("y_cells"));
         int colorScale = Integer.parseInt("" + pathSettingsFile.get("output_color_scale"));
         int pixelsPerImage = width * height;
+        blackThreshold = Integer.parseInt("" + pathSettingsFile.get("black_pixel_color_threshold"));
+        blackPixelsThreshold = Integer.parseInt("" + pathSettingsFile.get("black_pixel_count_limit")) * 0.01;
+
+        if (colorScale == 0) {
+            colorScale = BufferedImage.TYPE_INT_RGB;
+        } else {
+            colorScale = BufferedImage.TYPE_BYTE_GRAY;
+        }
 
         for (int i = 0; i < imageList.size(); i++) {
-
-            int h = height;
-            int w = width;
-            int vG = 0;
-            int hG = 0;
-            int cS = colorScale;
-
-            if (colorScale == 0) {
-                colorScale = BufferedImage.TYPE_INT_RGB;
-            } else {
-                colorScale = BufferedImage.TYPE_BYTE_GRAY;
-            }
-
             try {
+
+                int h = height;
+                int w = width;
+                int vG = 0;
+                int hG = 0;
+                int cS = colorScale;
+                int n = i;
+
+                while (services.size() >= threadLimit) {
+                    services = services.stream().filter(a -> !a.isTerminated()).collect(Collectors.toList());
+                }
+
                 BufferedImage image = ImageIO.read(new File(mainSettingsFile.get("images_path") + "\\" + imageList.get(i)));
-                int cellIndex = 0;
-                JSONArray array = new JSONArray();
-                for (int k = 0; k < yCells; k++) {
-                    for (int j = 0; j < xCells; j++) {
-                        BufferedImage theImage = new BufferedImage(w, h, cS);
-                        for (int y = k * h; y < (h * k) + h; y++) {
-                            for (int x = w * j; x < (w * j) + w; x++) {
-                                theImage.setRGB(hG + (x - (w * j)), vG + (y - (k * h)), image.getRGB(x, y));
-                            }
-                        }
-                        int blackPixels = 0;
-                        for (int l = 0; l < theImage.getWidth(); l++) {
-                            for (int m = 0; m < theImage.getHeight(); m++) {
-                                int color = theImage.getRGB(l, m);
-                                int blue = color & 0xff;
-                                int green = (color & 0xff00) >> 8;
-                                int red = (color & 0xff0000) >> 16;
-                                if ((blue < blackThreshold) && (red < blackThreshold) && (green < blackThreshold)) {
-                                    blackPixels++;
+                ExecutorService executor = Executors.newSingleThreadExecutor();
+                executor.submit(() -> {
+                    int cellIndex = 0;
+                    JSONArray array = new JSONArray();
+                    for (int k = 0; k < yCells; k++) {
+                        for (int j = 0; j < xCells; j++) {
+                            BufferedImage theImage = new BufferedImage(w, h, cS);
+                            for (int y = k * h; y < (h * k) + h; y++) {
+                                for (int x = w * j; x < (w * j) + w; x++) {
+                                    theImage.setRGB(hG + (x - (w * j)), vG + (y - (k * h)), image.getRGB(x, y));
                                 }
                             }
+                            int blackPixels = 0;
+                            for (int l = 0; l < theImage.getWidth(); l++) {
+                                for (int m = 0; m < theImage.getHeight(); m++) {
+                                    int color = theImage.getRGB(l, m);
+                                    int blue = color & 0xff;
+                                    int green = (color & 0xff00) >> 8;
+                                    int red = (color & 0xff0000) >> 16;
+                                    if ((blue < blackThreshold) && (red < blackThreshold) && (green < blackThreshold)) {
+                                        blackPixels++;
+                                    }
+                                }
+                            }
+                            //  System.out.println(blackPixels+" "+(blackPixelsThreshold * pixelsPerImage));
+
+                            if (blackPixels > (blackPixelsThreshold * pixelsPerImage)) {
+                                JSONArray positiveArray = (JSONArray) ((JSONObject) ((JSONArray) pathSettingsFile.get("positive_cells")).get(0)).get(imageList.get(n));
+                                boolean posFlag = false;
+                                for (int l = 0; l < positiveArray.size(); l++) {
+                                    if (String.valueOf(positiveArray.get(l)).equals(cellIndex + "")) {
+                                        posFlag = true;
+                                        break;
+                                    }
+                                }
+                                //   System.out.println(imageList.get(n) + " " + cellIndex + " " + positiveArray + " " + posFlag);
+                                if (!posFlag) {
+                                    array.add(cellIndex);
+                                }
+                            }
+                            cellIndex++;
                         }
-                        //  System.out.println(blackPixels+" "+(blackPixelsThreshold * pixelsPerImage));
-                        if (blackPixels > (blackPixelsThreshold * pixelsPerImage)) {
-                            System.out.println(imageList.get(i).replace(".jpg", "_" + cellIndex + ".jpg"));
-                            array.add(cellIndex);
-                        }
-                        cellIndex++;
+                        ((JSONObject) ((JSONArray) pathSettingsFile.get("black_cells")).get(0)).put(imageList.get(n), array);
                     }
-                    ((JSONObject) ((JSONArray) pathSettingsFile.get("black_cells")).get(0)).put(imageList.get(i), array);
-                }
+
+                });
+
+                executor.shutdown();
+                services.add(executor);
+
             } catch (IOException ex) {
                 Logger.getLogger(ImageHandler.class.getName()).log(Level.SEVERE, null, ex);
             }
-
         }
     }
 
@@ -155,6 +181,10 @@ public class ImageHandler {
         int fillindMode = Integer.parseInt("" + pathSettingsFile.get("filling_mode"));
         int fillingGap = Integer.parseInt("" + pathSettingsFile.get("filling_gap"));
         int colorScale = Integer.parseInt("" + pathSettingsFile.get("output_color_scale"));
+
+        int frameRotation = Integer.parseInt("" + pathSettingsFile.get("frame_rotation"));
+        int frameFlip = Integer.parseInt("" + pathSettingsFile.get("frame_flip"));
+        int frameFlipRotation = Integer.parseInt("" + pathSettingsFile.get("frame_flip_rotation"));
 
         if (colorScale == 0) {
             colorScale = BufferedImage.TYPE_INT_RGB;
@@ -191,6 +221,7 @@ public class ImageHandler {
                 break;
         }
 
+        services.clear();
         for (int i = 0; i < imageList.size(); i++) {
             int n = i;
             int cS = colorScale;
@@ -226,7 +257,7 @@ public class ImageHandler {
                     for (int k = 0; k < yCells; k++) {
                         for (int j = 0; j < xCells; j++) {
 
-                            BufferedImage theImage = new BufferedImage(finalImageSize, finalImageSize, cS);
+                            BufferedImage theImage = new BufferedImage(finalImageSize, finalImageSize, BufferedImage.TYPE_INT_RGB);
                             for (int x = 0; x < finalImageSize; x++) {
                                 for (int y = 0; y < finalImageSize; y++) {
                                     if (fillingColor == 0) {
@@ -243,22 +274,53 @@ public class ImageHandler {
                             }
 
                             if (positiveIndexes.contains(cellIndex)) {
+                                Image img = theImage.getScaledInstance(theImage.getWidth(), theImage.getHeight(), Image.SCALE_SMOOTH);
 
                                 for (int l = 0; l <= 3; l++) {
-                                    Image img = theImage.getScaledInstance(theImage.getWidth(), theImage.getHeight(), Image.SCALE_SMOOTH);
-                                    BufferedImage dimg = new BufferedImage(theImage.getWidth(), theImage.getHeight(), BufferedImage.TYPE_INT_RGB);
+                                    BufferedImage dimg = new BufferedImage(theImage.getWidth(), theImage.getHeight(), cS);
                                     Graphics2D g2d = dimg.createGraphics();
                                     g2d.rotate(Math.toRadians(l * 90), theImage.getWidth() / 2, theImage.getHeight() / 2);
-                                    g2d.scale(-1, 1);
                                     g2d.drawImage(img, 0, 0, null);
                                     g2d.dispose();
+                                    exportImage(dimg, "imgs/" + imageList.get(n).replace(".jpg", "") + "_" + cellIndex + "_rot_" + l + "_pos.jpg");
+                                    if (frameRotation == 0) {
+                                        break;
+                                    }
+                                }
 
-                                    File outputFile = new File("imgs/" + imageList.get(n).replace(".jpg", "") + "_" + cellIndex + "_rot_" + l + ".jpg");
-                                    ImageIO.write(dimg, "jpg", outputFile);
+                                if (frameFlip == 1) {
+                                    BufferedImage flipImg = new BufferedImage(theImage.getWidth(), theImage.getHeight(), cS);
+                                    BufferedImage flipImg2 = new BufferedImage(theImage.getWidth(), theImage.getHeight(), cS);
+                                    Graphics2D g2dGraphics = flipImg2.createGraphics();
+                                    g2dGraphics.drawImage(img, 0, 0, null);
+                                    g2dGraphics.dispose();
+                                    for (int l = 0; l < flipImg2.getWidth(); l++) {
+                                        for (int m = 0; m < flipImg2.getHeight(); m++) {
+                                            flipImg.setRGB(l, m, flipImg2.getRGB(flipImg2.getWidth() - l - 1, m));
+                                        }
+                                    }
+                                    // exportImage(dimg, "imgs/" + imageList.get(n).replace(".jpg", "") + "_" + cellIndex + "_flip.jpg");
+
+                                    for (int l = 0; l <= 3; l++) {
+                                        BufferedImage dimg = new BufferedImage(flipImg.getWidth(), flipImg.getHeight(), cS);
+                                        Graphics2D g2d = dimg.createGraphics();
+                                        g2d.rotate(Math.toRadians(l * 90), flipImg.getWidth() / 2, flipImg.getHeight() / 2);
+                                        g2d.drawImage(flipImg, 0, 0, null);
+                                        g2d.dispose();
+                                        exportImage(dimg, "imgs/" + imageList.get(n).replace(".jpg", "") + "_" + cellIndex + "_flip_rot_" + l + "_pos.jpg");
+                                        if (frameFlipRotation == 0) {
+                                            break;
+                                        }
+                                    }
                                 }
                             } else {
-                                File outputFile = new File("imgs/" + imageList.get(n).replace(".jpg", "") + "_" + cellIndex + ".jpg");
-                                ImageIO.write(theImage, "jpg", outputFile);
+
+                                Image img = theImage.getScaledInstance(theImage.getWidth(), theImage.getHeight(), Image.SCALE_SMOOTH);
+                                BufferedImage dimg = new BufferedImage(theImage.getWidth(), theImage.getHeight(), cS);
+                                Graphics2D g2d = dimg.createGraphics();
+                                g2d.drawImage(img, 0, 0, null);
+                                g2d.dispose();
+                                exportImage(dimg, "imgs/" + imageList.get(n).replace(".jpg", "") + "_" + cellIndex + "_neg.jpg");
                             }
 
                             cellIndex++;
@@ -272,10 +334,14 @@ public class ImageHandler {
 
             executor.shutdown();
             services.add(executor);
-            //  break;
+            break;
         }
         long estimatedTime = System.currentTimeMillis() - startTime;
         System.out.println("Time: " + estimatedTime);
     }
 
+    public void exportImage(BufferedImage dimg, String path) throws IOException {
+        File outputFile = new File(path);
+        ImageIO.write(dimg, "jpg", outputFile);
+    }
 }
