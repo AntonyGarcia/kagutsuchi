@@ -78,9 +78,10 @@ public class ImageHandler {
         String path = String.valueOf(mainSettingsFile.get("images_path")).replace("\\split_images\\ir_images", "") + "\\exported_images";
 
         try ( Stream<Path> paths = Files.walk(Paths.get(path))) {
-            paths.filter(Files::isRegularFile).forEach(a -> {
+            System.out.println(paths.toString());
+          /*  paths.filter(Files::isRegularFile).forEach(a -> {
                 System.out.println(a.getFileName());
-            });
+            });*/
         } catch (IOException ex) {
             Logger.getLogger(JFrameWindow.class.getName()).log(Level.SEVERE, null, ex);
         }
