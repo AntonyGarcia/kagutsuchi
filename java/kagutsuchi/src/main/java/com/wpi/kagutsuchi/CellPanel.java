@@ -75,8 +75,22 @@ public class CellPanel extends JPanel {
                         setBorder(border);
                     }
 
-                    JSONArray array = (JSONArray) ((JSONObject) ((JSONArray) settingsFile.get("positive_cells")).get(0)).get(imageName);
-                    List<Integer> indexes = new ArrayList<>();
+                    JSONArray array = null;
+                    try {
+                        array = (JSONArray) ((JSONObject) ((JSONArray) settingsFile.get("positive_cells")).get(0)).get(imageName);
+                        if (array.size() == 0) {
+                            throw new Exception();
+                        }
+                    } catch (Exception ex) {
+                        if (!settingsFile.toJSONString().contains("positive_cells")) {
+                            JSONArray arr = new JSONArray();
+                            arr.add(new JSONObject());
+                            settingsFile.put("positive_cells", arr);
+                        }
+                        ((JSONObject) ((JSONArray) settingsFile.get("positive_cells")).get(0)).put(imageName, new JSONArray());
+                        array = (JSONArray) ((JSONObject) ((JSONArray) settingsFile.get("positive_cells")).get(0)).get(imageName);
+                    }
+                         List<Integer> indexes = new ArrayList<>();
                     for (int i = 0; i < array.size(); i++) {
                         if (Integer.parseInt(array.get(i) + "") != cellIndex) {
                             indexes.add(Integer.parseInt(array.get(i) + ""));
@@ -113,8 +127,15 @@ public class CellPanel extends JPanel {
         this.blackCell = false;
         border = new LineBorder(Color.WHITE, 1);
         this.setBorder(border);
-
-        JSONArray array = (JSONArray) ((JSONObject) ((JSONArray) settingsFile.get("positive_cells")).get(0)).get(imageName);
+        JSONArray array = null;
+        try {
+            array = (JSONArray) ((JSONObject) ((JSONArray) settingsFile.get("positive_cells")).get(0)).get(imageName);
+            if (array.size() == 0) {
+                throw new Exception();
+            }
+        } catch (Exception e) {
+            array = new JSONArray();
+        }
 
         for (int i = 0; i < array.size(); i++) {
             if (Integer.parseInt(array.get(i) + "") == cellIndex) {
@@ -124,7 +145,14 @@ public class CellPanel extends JPanel {
             }
         }
         if (blackCellsFlag) {
-            array = (JSONArray) ((JSONObject) ((JSONArray) settingsFile.get("black_cells")).get(0)).get(imageName);
+            try {
+                array = (JSONArray) ((JSONObject) ((JSONArray) settingsFile.get("black_cells")).get(0)).get(imageName);
+                if (array.size() == 0) {
+                    throw new Exception();
+                }
+            } catch (Exception e) {
+                array = new JSONArray();
+            }
             for (int i = 0; i < array.size(); i++) {
                 if (Integer.parseInt(array.get(i) + "") == cellIndex) {
                     border = new LineBorder(new Color(114, 40, 111), 4);

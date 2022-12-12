@@ -146,9 +146,17 @@ public class JFrameWindow extends javax.swing.JFrame {
             pathSettingsFile = (JSONObject) parser.parse(getSettingFile(mainSettingsFile.get("images_path") + "\\settings.json"));
             sliderUpdate(Integer.parseInt("" + pathSettingsFile.get("grid_resolution")));
 
-            jSlider1.setValue(Integer.parseInt(pathSettingsFile.get("grid_resolution") + ""));
-            jSlider2.setValue(Integer.parseInt(pathSettingsFile.get("black_pixel_color_threshold") + ""));
-            jSlider3.setValue(Integer.parseInt(pathSettingsFile.get("black_pixel_count_limit") + ""));
+            try {
+                jSlider1.setValue(Integer.parseInt(pathSettingsFile.get("grid_resolution") + ""));
+                jSlider2.setValue(Integer.parseInt(pathSettingsFile.get("black_pixel_color_threshold") + ""));
+                jSlider3.setValue(Integer.parseInt(pathSettingsFile.get("black_pixel_count_limit") + ""));
+                jComboBox4.setSelectedIndex(Integer.parseInt(pathSettingsFile.get("black_cell_removal_rate") + ""));
+                jComboBox3.setSelectedItem(pathSettingsFile.get("training_set_size") + "-" + pathSettingsFile.get("testing_set_size"));
+            } catch (Exception e) {
+                jSlider1.setValue(0);
+                jSlider2.setValue(0);
+                jSlider3.setValue(0);
+            }
 
             if (String.valueOf(pathSettingsFile.get("frame_rotation")).equals("1")) {
                 jCheckBox1.setSelected(true);
@@ -164,10 +172,9 @@ public class JFrameWindow extends javax.swing.JFrame {
                 jCheckBox5.setSelected(true);
             }
 
-            jComboBox4.setSelectedIndex(Integer.parseInt(pathSettingsFile.get("black_cell_removal_rate") + ""));
-            jComboBox3.setSelectedItem(pathSettingsFile.get("training_set_size") + "-" + pathSettingsFile.get("testing_set_size"));
         } catch (Exception e) {
             System.out.println(e.getMessage());
+            Logger.getLogger(JFrameWindow.class.getName()).log(Level.SEVERE, null, e);
             sliderUpdate(5);
         }
         jTable1.grabFocus();
@@ -292,11 +299,30 @@ public class JFrameWindow extends javax.swing.JFrame {
         int cellsToRemove = 0;
 
         for (int i = 0; i < imagesList.size(); i++) {
-            JSONArray gridArray = (JSONArray) ((JSONObject) ((JSONArray) pathSettingsFile.get("positive_cells")).get(0)).get(imagesList.get(i));
+            JSONArray gridArray;
+            try {
+                gridArray = (JSONArray) ((JSONObject) ((JSONArray) pathSettingsFile.get("positive_cells")).get(0)).get(imagesList.get(i));
+                if (gridArray.size() == 0) {
+                    throw new Exception();
+                }
+            } catch (Exception e) {
+                gridArray = new JSONArray();
+            }
+
             positiveCells = positiveCells + gridArray.size();
         }
         for (int i = 0; i < imagesList.size(); i++) {
-            JSONArray gridArray = (JSONArray) ((JSONObject) ((JSONArray) pathSettingsFile.get("black_cells")).get(0)).get(imagesList.get(i));
+
+            JSONArray gridArray;
+            try {
+                gridArray = (JSONArray) ((JSONObject) ((JSONArray) pathSettingsFile.get("black_cells")).get(0)).get(imagesList.get(i));
+                if (gridArray.size() == 0) {
+                    throw new Exception();
+                }
+            } catch (Exception e) {
+                gridArray = new JSONArray();
+            }
+
             blackCells = (blackCells + gridArray.size());
         }
 
@@ -331,28 +357,46 @@ public class JFrameWindow extends javax.swing.JFrame {
 
         totalCells = positiveCells + negativeCells - blackCells;
 
-        int blackCellsToRemove = (int) (blackCells * (Integer.parseInt(String.valueOf(jComboBox4.getSelectedItem()).replace(" %", "")) * 0.01));
+        int blackCellsToRemove = 0;
+        blackCellsToRemove = (int) (blackCells * (Integer.parseInt(String.valueOf(jComboBox4.getSelectedItem()).replace(" %", "")) * 0.01));
+
         double blackPercToRemove = (blackCellsToRemove * Math.pow(totalCells, -1)) * 100;
 
         jTable2.setValueAt(blackCellsToRemove + " (" + f.format(blackPercToRemove) + " %)", 9, 1);
         negativeCells = negativeCells - blackCellsToRemove;
-        int negativeCellsToRemove = negativeCells - positiveCells;
+        int negativeCellsToRemove = 0;
+
+        negativeCellsToRemove = negativeCells - positiveCells;
+
         double negativeCellsToRemovePerc = (negativeCellsToRemove * Math.pow(totalCells, -1)) * 100;
         jTable2.setValueAt(negativeCellsToRemove + " (" + f.format(negativeCellsToRemovePerc) + " %)", 10, 1);
 
         negativeCells = negativeCells - negativeCellsToRemove;
 
+        if (negativeCells <= positiveCells) {
+            positiveCells = negativeCells;
+        }
+        totalCells = positiveCells + negativeCells;
+
         posPerc = (positiveCells * Math.pow(totalCells, -1)) * 100;
         negPerc = (negativeCells * Math.pow(totalCells, -1)) * 100;
 
         jTable2.setValueAt(positiveCells + " (" + f.format(posPerc) + " %)", 11, 1);
-        jTable2.setValueAt(positiveCells + " (" + f.format(negPerc) + " %)", 12, 1);
+        jTable2.setValueAt(negativeCells + " (" + f.format(negPerc) + " %)", 12, 1);
 
         int cellsToExport = positiveCells + negativeCells;
         jTable2.setValueAt(cellsToExport, 13, 1);
 
-        jTable2.setValueAt((int)(cellsToExport * Integer.parseInt(pathSettingsFile.get("training_set_size") + "") * 0.01), 14, 1);
-        jTable2.setValueAt((int)(cellsToExport * Integer.parseInt(pathSettingsFile.get("testing_set_size") + "") * 0.01), 15, 1);
+        int trainSet = 0;
+        int testSet = 0;
+        try {
+            trainSet = (int) (cellsToExport * Integer.parseInt(pathSettingsFile.get("training_set_size") + "") * 0.01);
+            testSet = (int) (cellsToExport * Integer.parseInt(pathSettingsFile.get("testing_set_size") + "") * 0.01);
+        } catch (Exception e) {
+        }
+
+        jTable2.setValueAt(trainSet, 14, 1);
+        jTable2.setValueAt(testSet, 15, 1);
 
     }
 
@@ -1006,6 +1050,8 @@ public class JFrameWindow extends javax.swing.JFrame {
     }//GEN-LAST:event_jButton1ActionPerformed
 
     private void jButton2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton2ActionPerformed
+        int value = jSlider1.getValue();
+        sliderUpdate(value);
 
         int finalImageSize = Integer.parseInt(jTextField1.getText());
         try {
@@ -1018,11 +1064,17 @@ public class JFrameWindow extends javax.swing.JFrame {
             pathSettingsFile.put("filling_gap", (int) (Integer.parseInt(jTextField1.getText()) - cellSize));
             pathSettingsFile.put("output_color_scale", jComboBox2.getSelectedIndex() + "");
 
+            pathSettingsFile.put("positive_cells_to_export", (jTable2.getValueAt(11, 1) + "").substring(0, (jTable2.getValueAt(11, 1) + "").indexOf(" ")));
+            pathSettingsFile.put("negative_cells_to_export", (jTable2.getValueAt(12, 1) + "").substring(0, (jTable2.getValueAt(12, 1) + "").indexOf(" ")));
+
+            pathSettingsFile.put("train_dataset_size", jTable2.getValueAt(14, 1) + "");
+            pathSettingsFile.put("test_dataset_size", jTable2.getValueAt(15, 1) + "");
+
             new ImageHandler(mainSettingsFile, pathSettingsFile, imagesList).test();
             saveTextFile(mainSettingsFile.get("images_path") + "\\settings.json", pathSettingsFile.toJSONString());
 
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(null, e.getMessage());
+            Logger.getLogger(JFrameWindow.class.getName()).log(Level.SEVERE, null, e);
         }
 
         // System.out.println(jComboBox1.getSelectedIndex()+"");
@@ -1130,6 +1182,7 @@ public class JFrameWindow extends javax.swing.JFrame {
             Component[] cells = jPanel1.getComponents();
             new ImageHandler(mainSettingsFile, pathSettingsFile, imagesList).deadCellsSearch();
             Thread.sleep(250);
+
             for (int i = 0; i < cells.length - 1; i++) {
                 ((CellPanel) cells[i]).paintCells(true);
             }
@@ -1168,7 +1221,6 @@ public class JFrameWindow extends javax.swing.JFrame {
             } else {
                 pathSettingsFile.put("frame_rotation", "0");
             }
-
             updateDatasetInfomation();
             saveTextFile(mainSettingsFile.get("images_path") + "\\settings.json", pathSettingsFile.toJSONString());
         }
