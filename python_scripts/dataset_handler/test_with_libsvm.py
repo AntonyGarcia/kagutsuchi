@@ -71,5 +71,6 @@ def main():
     print("Testing time: ", round(testingTime, 2), " s")
     print("Testing accuracy: ", round((validResults / testingSamples) * 100, 2), "%")
 
+
 if __name__ == "__main__":
     main()
