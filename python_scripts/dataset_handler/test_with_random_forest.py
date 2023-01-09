@@ -25,6 +25,7 @@ trainingTime = 0
 startTestingTime = 0
 endTestingTime = 0
 testingTime = 0
+accuracy=0
 
 
 def loadDataset(fileName):  # A function for loading the data from a dataset
@@ -41,26 +42,18 @@ def main():
     train_x, train_y, trainingSamples = loadDataset(train_path)  # Loading training data
     test_x, test_y, testingSamples = loadDataset(test_path)  # Loading testing data
     clf = RandomForestClassifier()  # Classifier object
+    print("Start training")
     startTrainingTime = time.time()
     clf.fit(train_x, train_y)  # Training of a model by fitting training data to object
     endTrainingTime = time.time()
     trainingTime = endTrainingTime - startTrainingTime  # Training time calculation
+    print(trainingTime)
 
-    validResults = 0
     startTestingTime = time.time()
-    for i in range(len(test_y)):  # A for loop to evaluate result vs expected results
-        expectedResult = int(test_y[int(i)])  # Load expected result from testing dataset
-        result = int(clf.predict(test_x[int(i)].reshape(1, len(test_x[int(i)]))))  # Calculate a result
-        outcome = "Fail"
-        if result == expectedResult:
-            validResults = validResults + 1  # Counting valid results
-            outcome = " OK "
-        print("Nº ", i + 1, " | Expected result: ", expectedResult, " | Obtained result: ", result, " | ", outcome,
-              " | Accuracy: ", round((validResults / (i + 1)) * 100, 2),
-              "%")  # Printing the results for each label in testing dataset
-
+    accuracy = clf.score(test_x, test_y)
     endTestingTime = time.time()
-    testingTime = endTestingTime - startTestingTime  # Calculation of testing time
+
+    testingTime = endTestingTime-startTestingTime
 
     print("-------------------------------")
     print("Results")
@@ -69,7 +62,7 @@ def main():
     print("Training time: ", round(trainingTime, 2), " s")
     print("Testing samples: ", testingSamples)
     print("Testing time: ", round(testingTime, 2), " s")
-    print("Testing accuracy: ", round((validResults / testingSamples) * 100, 2), "%")
+    print("Testing accuracy: ", accuracy)
 
 if __name__ == "__main__":
     main()
